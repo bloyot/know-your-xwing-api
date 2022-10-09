@@ -31,7 +31,7 @@
 (defn load-upgrade-file [file-name]
   (as-> (slurp file-name) s
     (cheshire/parse-string s true)
-    (map #(conj [] (:name %) %) s)
+    (map #(conj [] (name-to-keyword (:name %)) %) s)
     (into {} s)))
 
 (defn load-upgrades []
@@ -60,4 +60,6 @@
   {:upgrades (load-upgrades)
    :pilots (load-pilots)})
 
+(def factions (keys (:pilots cards)))
+(def upgrade-types (keys (:upgrades cards)))
 

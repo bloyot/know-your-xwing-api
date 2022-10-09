@@ -1,14 +1,21 @@
 (ns know-your-xwing-api.handler
   (:require [compojure.api.sweet :refer :all]
+            [know-your-xwing-api.game :as game]
+            [ring.adapter.jetty :refer :all]
             [ring.util.http-response :refer :all]
             [schema.core :as s]))
 
-(s/defschema Pizza
-  {:name s/Str
-   (s/optional-key :description) s/Str
-   :size (s/enum :L :M :S)
-   :origin {:country (s/enum :FI :PO)
-            :city s/Str}})
+(s/defschema GameConfig
+  {:number-of-cards s/Int
+   :card-types [(s/enum :upgrades :pilots)]
+   :factions [(s/enum
+               :galactic-empire
+               :separatist-alliance
+               :scum-and-villainy
+               :first-order
+               :rebel-alliance
+               :resistance
+               :galactic-republic)]})
 
 (def app
   (api
@@ -16,20 +23,14 @@
      {:ui "/"
       :spec "/swagger.json"
       :data {:info {:title "Know-your-xwing-api"
-                    :description "Compojure Api example"}
-             :tags [{:name "api", :description "some apis"}]}}}
+                    :description "Api to generate card data for xwing trivia game"}
+             :tags [{:name "api", :description "the core apis for game cards"}]}}}
 
     (context "/api" []
       :tags ["api"]
 
-      (GET "/plus" []
-        :return {:result Long}
-        :query-params [x :- Long, y :- Long]
-        :summary "adds two numbers together"
-        (ok {:result (+ x y)}))
+      (POST "/generate-game" []
+        :body [{:keys [number-of-cards card-types factions]} GameConfig]
+        :summary "generate the cards for a game given a game configuration (the rules)"
+        (ok (game/generate-game card-types factions number-of-cards))))))
 
-      (POST "/echo" []
-        :return Pizza
-        :body [pizza Pizza]
-        :summary "echoes a Pizza"
-        (ok pizza)))))
