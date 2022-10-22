@@ -18,7 +18,28 @@
 (defn- name-to-keyword
   "Turn a card name into a keyword, standardizing casing and whitespace"
   [name]
-  (keyword (str/lower-case (str/replace name #" " "-"))))
+  (-> name
+      (str/replace #" " "-")
+      (str/replace #"“" "")
+      (str/replace #"”" "")
+      str/lower-case
+      keyword))
+
+(defn- map-by
+  "gives a sequence of items, return a map where the key is the result of calling the
+  key-fn on each element, and the val is the result of calling val-fn on each element"
+  ([s key-fn]
+   (map-by s key-fn identity))
+  ([s key-fn val-fn]
+   (into {} (map (fn [itm] [(key-fn itm) (val-fn itm)]) s))))
+
+(defn- filter-empty-keys
+  "for a map, filter out any keys which have emtpy value"
+  [m]
+  (let [m-keys (keys m)
+        valid-keys (filter #(seq (get m %)) m-keys)]
+    ;; check if the val for each key is not empty
+    (select-keys m valid-keys)))
 
 (defn- get-json-file-name-from-path
   "Given a full path like 'foo/bar/something.json' return 'something'. Assumes file ends
@@ -37,33 +58,39 @@
   (as-> (slurp file-name) s
     (cheshire/parse-string s true)
     (filter standard-legal? s)
-    (map #(conj [] (name-to-keyword (:name %)) %) s)
+    (map-by s #(name-to-keyword (:name %)))
     (into {} s)))
 
 (defn- load-upgrades []
-  (let [upgrade-files (get-file-names upgrade-path)]
-    (into {} (map #(conj [] (keyword (get-json-file-name-from-path %)) (load-upgrade-file %)) upgrade-files))))
+  (let [upgrade-files (get-file-names upgrade-path)
+        upgrades (map-by upgrade-files
+                         #(keyword (get-json-file-name-from-path %))
+                         #(load-upgrade-file %))
+        standard-legal (filter-empty-keys upgrades)]
+    standard-legal))
 
 ;; pilots
 (defn- load-ship [faction-name ship-name]
-  (as-> (slurp (str faction-name "/" ship-name ".json")) s
+  (as-> (slurp (str pilots-path "/" faction-name "/" ship-name ".json")) s
     (cheshire/parse-string s true)
     (:pilots s)
     (filter standard-legal? s)
-    (into {} (map #(conj [] (name-to-keyword (:name %)) %) s))))
+    (map-by s #(name-to-keyword (:name %)))))
 
 (defn- load-faction [faction-name]
   ;; TODO refactor this to use a thread macro
-  (let [ship-names (->> faction-name
+  (let [ship-names (->> (str pilots-path "/" faction-name)
                         get-file-names
                         (map get-json-file-name-from-path))
-        ships (into {} (map #(conj [] (keyword %) (load-ship faction-name %)) ship-names))
-        standard-legal (filter (fn [[k v]] (seq v)) ships)]
+        ships (map-by ship-names keyword #(load-ship faction-name %))
+        standard-legal (filter-empty-keys ships)]
     standard-legal))
 
 (defn- load-pilots []
-  (let [faction-names (filter #(not= pilots-path %) (get-dir-names pilots-path))]
-    (into {} (map #(conj [] (keyword (last (str/split % #"/"))) (load-faction %)) faction-names))))
+  (let [faction-names (->> (get-dir-names pilots-path)
+                           (filter #(not= pilots-path %))
+                           (map #(str/replace % (re-pattern (str pilots-path "/")) "")))]
+    (map-by faction-names #(keyword (last (str/split % #"/"))) #(load-faction %))))
 
 ;; load all cards into memory, keyed by type, faction, etc
 (def cards

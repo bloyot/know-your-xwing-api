@@ -24,9 +24,36 @@
   [card-types factions]
   (let [card-type (choose-random-value card-types)]
     (case card-type
-      :upgrades (choose-upgrade)
-      :pilots (choose-pilot (choose-random-value factions))
+      :upgrades (assoc (val (choose-upgrade)) :type card-type)
+      :pilots (assoc (val (choose-pilot (choose-random-value factions))) :type card-type)
       nil)))
+
+(defmulti card->question
+  "Given a card, transform it to a question by removing uneeded fields, and adding
+  related wrong answers."
+  :type)
+
+(defmethod card->question :upgrades
+  [card]
+  {:name (:name card)
+   :card-type :upgrade
+   :ability (:ability (first (:sides card)))
+   :image-url :todo
+   :wrong-abilities ["ability 1" "ability 2"]})
+
+(defmethod card->question :pilots
+  [card]
+  {:name (:name card)
+   :card-type :upgrade
+   :ability :todo
+   :image-url :todo
+   :wrong-abilities ["ability 1" "ability 2"]})
+
+(defmethod card->question :default
+  [card]
+  (println "Invalid card type when converting to question")
+  nil)
+
 
 (defn generate-game
   "Given a set of card types, factions, and the number of cards to generate, return
