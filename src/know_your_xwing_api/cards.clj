@@ -2,7 +2,8 @@
   (:require
    [cheshire.core :as cheshire]
    [clojure.java.io :as io]
-   [clojure.string :as str]))
+   [clojure.string :as str]
+   [know-your-xwing-api.utils :as utils]))
 
 ;; defs
 (def base-data-path "resources/data")
@@ -14,16 +15,6 @@
   "return true if this card is standard legal, else false"
   [card]
   (true? (:standard card)))
-
-(defn- name-to-keyword
-  "Turn a card name into a keyword, standardizing casing and whitespace"
-  [name]
-  (-> name
-      (str/replace #" " "-")
-      (str/replace #"“" "")
-      (str/replace #"”" "")
-      str/lower-case
-      keyword))
 
 (defn- map-by
   "gives a sequence of items, return a map where the key is the result of calling the
@@ -58,7 +49,7 @@
   (as-> (slurp file-name) s
     (cheshire/parse-string s true)
     (filter standard-legal? s)
-    (map-by s #(name-to-keyword (:name %)))
+    (map-by s #(utils/name-to-keyword (:name %)))
     (into {} s)))
 
 (defn- load-upgrades []
@@ -75,7 +66,7 @@
     (cheshire/parse-string s true)
     (:pilots s)
     (filter standard-legal? s)
-    (map-by s #(name-to-keyword (:name %)))))
+    (map-by s #(utils/name-to-keyword (:name %)))))
 
 (defn- load-faction [faction-name]
   ;; TODO refactor this to use a thread macro
