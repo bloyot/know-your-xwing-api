@@ -25,21 +25,30 @@
   (nth (seq s) (rand-int (count s))))
 
 (defn choose-upgrade
-  "Choose an upgrade card at random for the given faction"
+  "Choose an upgrade card at random for the given faction (including neutral)"
   [faction]
   (let [upgrade-type (choose-random-value (keys (:upgrades cards/cards)))
         upgrades (get-in cards/cards [:upgrades upgrade-type])
         faction-upgrades (filter-faction-upgrades upgrades faction)]
-    (assoc (val (choose-random-value faction-upgrades))
-           :card-type :upgrades)))
+    ;; there's an unlikely edge case for a handful of upgrade type/faction combinations where
+    ;; there may not be a valid upgrade of that type. In that case, just pick again
+    (if (seq faction-upgrades)
+      (assoc (val (choose-random-value faction-upgrades))
+             :card-type :upgrades
+             :faction faction)
+      (choose-upgrade faction))))
 
 (defn choose-pilot
   "Choose a pilot within the given faction at random"
   [faction]
-  (let [ship (choose-random-value (keys (get-in cards/cards [:pilots faction])))]
-    (assoc (val (choose-random-value (get-in cards/cards [:pilots faction ship])))
-           :faction faction
-           :card-type :pilots)))
+  (let [ship (choose-random-value (keys (get-in cards/cards [:pilots faction])))
+        pilot (val (choose-random-value (get-in cards/cards [:pilots faction ship])))]
+    ;; some pilots don't have an ability, in which case simply choose again
+    (if (nil? (:ability pilot))
+      (choose-pilot faction)
+      (assoc pilot
+             :faction faction
+             :card-type :pilots))))
 
 (defn choose-card
   "Choose a single card at random, within the given card type and faction"
@@ -57,20 +66,24 @@
   :card-type)
 
 (defmethod card->question :upgrades
-  [card]
-  {:name (:name card)
-   :card-type :upgrade
-   :ability (:ability (first (:sides card)))
-   :image-url (:image (first (:sides card)))
-   :wrong-abilities [(:ability (first (choose-card #{:upgrade} #{})))]})
+  [{:keys [name faction sides]}]
+  {:name name
+   :card-type :upgrades
+   :faction faction
+   :ability (:ability (first sides))
+   :image-url (:image (first sides))
+   :wrong-abilities [(:ability (first (:sides (choose-card #{:upgrades} #{faction}))))
+                     (:ability (first (:sides (choose-card #{:upgrades} #{faction}))))]})
 
 (defmethod card->question :pilots
-  [card]
-  {:name (:name card)
-   :card-type :upgrade
-   :ability :todo
-   :image-url :todo
-   :wrong-abilities ["ability 1" "ability 2"]})
+  [{:keys [name faction image ability]}]
+  {:name name
+   :card-type :pilots
+   :faction faction
+   :ability ability
+   :image-url image
+   :wrong-abilities [(:ability (choose-card #{:pilots} #{faction}))
+                     (:ability (choose-card #{:pilots} #{faction}))]})
 
 (defmethod card->question :default
   [card]
@@ -85,4 +98,4 @@
   ;; DEBUG for testing purposes
   (Thread/sleep 500)
   (for [x (range num-cards)]
-    (choose-card card-types factions)))
+    (card->question (choose-card card-types factions))))
